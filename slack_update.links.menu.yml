@@ -1,0 +1,6 @@
+slack_update.admin_settings_form:
+  title: 'Slack Update configuration'
+  route_name: slack_update.admin_settings_form
+  description: 'Update the settings for Slack Update Module'
+  parent: system.admin_config_system
+  weight: 99

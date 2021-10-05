@@ -1,0 +1,5 @@
+name: Slack Update (After Contact Form)
+description: Send a message to slack after the contact form is submitted
+package: customs
+type: module
+core_version_requirement: ^9

@@ -1,0 +1,96 @@
+<?php
+
+/**
+ * @file
+ * A module that adds extra functionality to the contact form submit.
+ * The extra functionality allows a slack notification to be sent.
+ */
+
+
+
+/**
+ * Implements hook_form_alter().
+ *
+ * Hooks the Submit functionality of a drupal form.
+ * In this case, specifically the Contact Form
+ *
+ * @param form
+ *   The form object
+ * @param form_state
+ *   The state of the form
+ * @param form_id
+ *   The ID of the particular form that has been submitted
+ */
+function slack_update_form_alter(&$form, \Drupal\Core\Form\FormStateInterface $form_state, $form_id){
+  $config = \Drupal::config('slack_update.adminsettings');
+  $machineName = $config->get('contactform_machine_name');
+
+  //throw new Exception('Oh no, an exception! ' . $form_id);
+  if ($form_id == "contact_message_{$machineName}_form"){
+    // don't replace form submit, but instead add extra functionality to it
+    $form['actions']['submit']['#submit'][] = 'slack_update_form_submit_handler';
+  }
+}
+
+
+/**
+ * This is the functionality that allows us to send an
+ * update message to slack.
+ */
+function slack_update_form_submit_handler() {
+  // grab the config from drupal
+  $config = \Drupal::config('slack_update.adminsettings');
+  // get the slack webhook url from drupal config
+  $url = $config->get('hook_url');
+
+  $logged_in = \Drupal::currentUser()->isAuthenticated();
+
+  if ($logged_in) {
+    $user = \Drupal\user\Entity\User::load(\Drupal::currentUser()->id());
+
+    $email = $user->get('mail')->value;
+    $name = $user->get('name')->value;
+  } else {
+    $email = htmlspecialchars((isset($_POST['mail'])) ? $_POST['mail'] : "");
+    $name = htmlspecialchars((isset($_POST['name'])) ? $_POST['name'] : "");
+  }
+
+  $message = htmlspecialchars((isset($_POST['message'][0]['value'])) ? $_POST['message'][0]['value'] : "");
+
+  $bodyText = "
+Contact form message from antiochtoastmasters.com.\n
+Name: {$name}\n
+Email: {$email}\n
+Message:\n{$message}
+  ";
+
+  // HERE IS THE POST TO SLACK
+  $ch = curl_init( $url );
+
+  $data = [
+    "username" => "HAL9001",
+    "text" => $bodyText,
+    "icon_emoji" => ":robot_face:"
+  ];
+
+  # Setup request to send json via POST.
+  $payload = json_encode($data, JSON_THROW_ON_ERROR, 512);
+
+  curl_setopt( $ch, CURLOPT_HTTPHEADER, array('Content-Type:application/json'));
+  curl_setopt( $ch, CURLOPT_CUSTOMREQUEST, 'POST');
+  curl_setopt( $ch, CURLOPT_POSTFIELDS, $payload );
+  # Return response instead of printing.
+  curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
+  curl_setopt( $ch, CURLOPT_SSL_VERIFYPEER, true);
+  # Send request.
+  $result = curl_exec($ch);
+  curl_close($ch);
+
+  //error_log("Result for POST to slack: {$result}");
+  if ($result != 'ok') {
+    $errorMessage = "A problem occured when trying to send a message to slack.";
+    error_log($errorMessage);
+    \Drupal::logger('slack_update')->error($errorMessage);
+  }
+}
+
